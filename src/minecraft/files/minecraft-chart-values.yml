@@ -1,0 +1,39 @@
+# https://github.com/helm/charts/blob/master/stable/minecraft/values.yaml
+minecraftServer:
+  eula: true
+  serviceType: NodePort
+  nodePort: 30972
+  version: "1.15.1"
+  type: SPIGOT
+  ops: nolte07,BlueBeaver
+  whitelist: nolte07,BlueBeaver
+resources:
+  requests:
+    memory: 2048Mi
+    cpu: 1500m
+livenessProbe:
+  command:
+    - "mc-monitor"
+    - "status"
+    - "--host"
+    - "localhost"
+    - "--port"
+    - "25565"
+  initialDelaySeconds: 45
+  periodSeconds: 5
+readinessProbe:
+  command:
+    - "mc-monitor"
+    - "status"
+    - "--host"
+    - "localhost"
+    - "--port"
+    - "25565"
+  initialDelaySeconds: 45
+  periodSeconds: 5
+
+persistence:
+  annotations:
+    stash.appscode.com/backup-blueprint: mc-backup-blueprint
+
+podAnnotations: {}
