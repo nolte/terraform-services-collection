@@ -1,23 +1,22 @@
 # Collection of Common Services Configuration
 
-Repository for a collection of Common Services.
+This Repository represent a combination of [Terraform Sources](https://www.terraform.io/docs/configuration/modules.html), [tektoncd/pipeline](https://github.com/tektoncd/pipeline).
 
+## Services
 
+The Terraform Modules implement a Workarround for a ```depends_on``` function, thanks at [matti/terraform-module-depends_on](https://github.com/matti/terraform-module-depends_on) for [#10462](https://github.com/hashicorp/terraform/issues/10462).
 
-```
+You will find a full ist of service modules at [./tf-modules](./tf-modules).
 
-export KUBECONFIG=$(pwd)/bin/k3s.yml
+## Service Combinations
 
-kubectl -n minio port-forward svc/minio 9000:9000
+The Terraform ```Service Combinations``` Scripts provide a preconfigured set of services, for different UseCases.
 
+### Terraform Workspace Syntax
 
-export AWS_ACCESS_KEY_ID=$(kubectl -n minio get secret minio -ojson | jq -r '.data.accesskey' | base64 -d) \
-    && export AWS_SECRET_ACCESS_KEY=$(kubectl -n minio get secret minio -ojson | jq -r '.data.secretkey' | base64 -d) \
-    && export AWS_S3_ENDPOINT=http://localhost:9000 \
-    && export MINIO_ENDPOINT=localhost:9000 \
-    && export MINIO_ACCESS_KEY=$(kubectl -n minio get secret minio -ojson | jq -r '.data.accesskey' | base64 -d) \
-    && export MINIO_SECRET_KEY=$(kubectl -n minio get secret minio -ojson | jq -r '.data.secretkey' | base64 -d)
+All Terraform scripts works with different Workspaces, this makes possible that you can test the Sevice Combinations on different Stages.
 
-```bash
+The **Syntax**: ```[stage]-[service]```
 
-mc config host add testminio http://localhost:9000 $(kubectl -n minio get secret minio -ojson | jq -r '.data.accesskey' | base64 -d) $(kubectl -n minio get secret minio -ojson | jq -r '.data.secretkey' | base64 -d)
+Example:  
+```online-storagebox```

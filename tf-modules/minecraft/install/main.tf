@@ -1,13 +1,21 @@
-locals {
-  backup_bucket_name        = "stash-backup"
-  backup_bucket_policy_name = "stash-backups"
-  s3_backup_endpoint        = "http://minio.minio.svc:9000"
+
+variable "backup_bucket_name" {
+  default = "stash-backup"
+}
+
+variable "s3_backup_endpoint" {
+  default = "http://minio.minio.svc:9000"
 }
 
 resource "kubernetes_namespace" "minecraft_namespace" {
+  depends_on = [var.depends_list]
   metadata {
     name = "minecraft"
   }
+}
+
+variable "minecraft_volume_size" {
+  default = "10Gi"
 }
 
 data "helm_repository" "nolte" {
@@ -20,13 +28,16 @@ resource "kubernetes_persistent_volume_claim" "minecraft" {
   metadata {
     name      = "minecraft-pvc"
     namespace = kubernetes_namespace.minecraft_namespace.metadata[0].name
+    annotations = {
+      "stash.appscode.com/backup-blueprint" : "mc-backup-blueprint"
+    }
   }
   wait_until_bound = false
   spec {
     access_modes = ["ReadWriteOnce"]
     resources {
       requests = {
-        storage = "10Gi"
+        storage = var.minecraft_volume_size
       }
     }
   }
@@ -47,8 +58,8 @@ metadata:
 spec:
   backend:
     s3:
-      endpoint: ${local.s3_backup_endpoint} # use server URL for s3 compatible other storage service
-      bucket: ${local.backup_bucket_name}
+      endpoint: ${var.s3_backup_endpoint} # use server URL for s3 compatible other storage service
+      bucket: ${var.backup_bucket_name}
       prefix: k8s/pvc/minecraft/persistentvolumeclaim/minecraft-minecraft-datadir
     storageSecretName: ${kubernetes_secret.mc_stash_backup_credentials.metadata[0].name}
   wipeOut: false
@@ -79,17 +90,31 @@ spec:
 }
 
 resource "helm_release" "minecraft" {
+  depend_on  = [kubernetes_persistent_volume_claim.minecraft]
   name       = "minecraft"
   repository = data.helm_repository.nolte.metadata[0].name
   chart      = "minecraft"
   namespace  = kubernetes_namespace.minecraft_namespace.metadata[0].name
   values = [
-    "${file("files/minecraft-chart-values.yml")}"
+    "${file("${path.module}/files/minecraft-chart-values.yml")}"
   ]
 
   set {
     name  = "persistence.dataDir.existing"
     value = kubernetes_persistent_volume_claim.minecraft.metadata[0].name
+  }
+
+  set {
+    name  = "persistence.dataDir.Size"
+    value = var.minecraft_volume_size
+  }
+  set {
+    name  = "minecraftServer.rcon.password"
+    value = "CHANGEME!"
+  }
+  set {
+    name  = "minecraftServer.nodePort"
+    value = 30972
   }
 }
 
@@ -103,9 +128,18 @@ resource "minio_iam_user" "minio_backup_user" {
   }
 }
 
-resource "minio_iam_user_policy_attachment" "minio_backup_user_policy" {
-  policy_name = local.backup_bucket_policy_name
-  user_name   = minio_iam_user.minio_backup_user.name
+variable "minio_stash_backup_group_name" {
+  default = "stash-backups"
+}
+
+resource "minio_iam_group_membership" "stash-backupusers" {
+  name = "tf-stash-minecraft-backupusers-membership"
+
+  users = [
+    "${minio_iam_user.minio_backup_user.name}"
+  ]
+
+  group = var.minio_stash_backup_group_name
 }
 
 
@@ -135,8 +169,8 @@ spec:
   # ============== Blueprint for Repository ==========================
   backend:
     s3:
-      endpoint: ${local.s3_backup_endpoint} # use server URL for s3 compatible other storage service
-      bucket: ${local.backup_bucket_name}
+      endpoint: ${var.s3_backup_endpoint} # use server URL for s3 compatible other storage service
+      bucket: ${var.backup_bucket_name}
       prefix: /k8s/pvc/$${TARGET_NAMESPACE}/$${TARGET_KIND}/$${TARGET_NAME}
     storageSecretName: ${kubernetes_secret.mc_stash_backup_credentials.metadata[0].name}
   # ============== Blueprint for BackupConfiguration =================
@@ -153,4 +187,14 @@ spec:
     keepYearly: 10    
     prune: true
     YAML
+}
+
+
+variable "depends_list" {
+  default = []
+}
+
+output "depend_on" {
+  # list all resources in this module here so that other modules are able to depend on this
+  value = [helm_release.minecraft.id]
 }

@@ -1,4 +1,5 @@
 resource "kubernetes_namespace" "backup_namespace" {
+  depends_on = [var.depends_list]
   metadata {
     name = "stash"
   }
@@ -28,10 +29,10 @@ resource "kubernetes_secret" "stash_s3_credentials" {
 }
 
 
-resource "minio_iam_user_policy_attachment" "minio_backup_user_policy" {
-  policy_name = "stash-backups"
-  user_name   = minio_iam_user.minio_backup_user.name
-}
+#resource "minio_iam_user_policy_attachment" "minio_backup_user_policy" {
+#  policy_name = "stash-backups"
+#  user_name   = minio_iam_user.minio_backup_user.name
+#}
 
 variable "minio_stash_backup_group_name" {
   default = "stash-backups"
@@ -58,7 +59,18 @@ resource "helm_release" "stash" {
   chart      = "stash"
   namespace  = kubernetes_namespace.backup_namespace.metadata[0].name
   values = [
-    "${file("files/stash-chart-values.yml")}"
+    "${file("${path.module}/files/stash-chart-values.yml")}"
   ]
   version = "v0.9.0-rc.4"
 }
+
+
+variable "depends_list" {
+  default = []
+}
+
+output "depend_on" {
+  # list all resources in this module here so that other modules are able to depend on this
+  value = [helm_release.stash.id]
+}
+
